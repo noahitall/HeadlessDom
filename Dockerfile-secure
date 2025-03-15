@@ -1,0 +1,65 @@
+FROM python:3.9-slim
+
+# Install dependencies needed for Playwright
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    libglib2.0-0 \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libatspi2.0-0 \
+    libx11-6 \
+    libxcb1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add non-root user for security
+RUN groupadd -r headlessuser && useradd -r -g headlessuser headlessuser
+
+# Set the working directory
+WORKDIR /app
+
+# Copy requirements file
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Set up the non-root user's home directory and cache directories
+RUN mkdir -p /home/headlessuser/.cache && \
+    chown -R headlessuser:headlessuser /home/headlessuser && \
+    chown -R headlessuser:headlessuser /app
+
+# Switch to non-root user for Playwright installation
+USER headlessuser
+
+# Install Playwright browsers for the non-root user
+# This ensures browsers are installed in the correct user's cache directory
+RUN python -m playwright install chromium
+
+# Copy application code (as root temporarily)
+USER root
+COPY app.py .
+RUN chown headlessuser:headlessuser /app/app.py
+
+# Switch back to non-root user for running the app
+USER headlessuser
+
+# Expose the port the app runs on
+EXPOSE 5000
+
+# Command to run the application
+CMD ["python", "app.py"] 
