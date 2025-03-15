@@ -35,12 +35,27 @@ Follow these steps to build the installer package:
    - Install required dependencies
    - Install Playwright and the Chromium browser to a dedicated path
    - Configure the service to start automatically
+   - Verify that the service has started successfully
 
 5. After installation completes, verify the service is running:
    ```bash
    headlessdom status
    headlessdom test
    ```
+
+### Automatic Startup on Installation
+
+The installer has been enhanced to ensure HeadlessDom starts automatically:
+
+1. The service is configured as a LaunchAgent to start at system boot
+2. During installation, the service is loaded immediately 
+3. A verification step checks if the service started correctly
+4. If the service fails to start, a fallback LaunchDaemon is created to ensure it loads on the next restart
+
+If you need to restart the service manually after installation:
+```bash
+sudo headlessdom restart
+```
 
 ## Troubleshooting Installation
 
@@ -60,6 +75,20 @@ If installation fails or the service doesn't start:
    - Go to System Preferences > Security & Privacy
    - Click "Allow" for the blocked installer
    - Or run: `sudo spctl --master-disable` to temporarily disable Gatekeeper
+
+4. If the service isn't running after installation:
+   ```bash
+   # Check the status
+   headlessdom status
+   
+   # View any error logs
+   headlessdom logs
+   
+   # Restart the service
+   sudo headlessdom restart
+   ```
+
+5. In rare cases, a system restart may be needed for the service to start correctly
 
 ## Managing the Service
 
@@ -197,7 +226,7 @@ If you prefer to install manually:
 
 6. Load the service:
    ```bash
-   sudo launchctl load /Library/LaunchAgents/com.headlessdom.service.plist
+   sudo launchctl load -w /Library/LaunchAgents/com.headlessdom.service.plist
    ```
 
 ## Uninstalling
@@ -215,6 +244,9 @@ sudo launchctl unload /Library/LaunchAgents/com.headlessdom.service.plist
 sudo rm -f /Library/LaunchAgents/com.headlessdom.service.plist
 sudo rm -rf /Applications/HeadlessDom
 sudo rm -f /usr/local/bin/headlessdom
+# Also remove the backup startup daemon if it exists
+sudo launchctl unload /Library/LaunchDaemons/com.headlessdom.startup.plist 2>/dev/null
+sudo rm -f /Library/LaunchDaemons/com.headlessdom.startup.plist
 ```
 
 ## Advanced: How It Works
@@ -227,6 +259,18 @@ The installer sets up a Python-based web service that:
 2. Uses a dedicated browser installation path (`/Applications/HeadlessDom/browsers`)
 3. Binds only to localhost (127.0.0.1) for security
 4. Logs to `/Applications/HeadlessDom/logs/`
+
+### Launch Agent and Daemon Configuration
+
+HeadlessDom uses two mechanisms to ensure reliable startup:
+
+1. **Primary LaunchAgent**: Installed in `/Library/LaunchAgents/` with:
+   - `RunAtLoad` set to `true` - makes the service start at boot
+   - `KeepAlive` set to `true` - restarts the service if it terminates unexpectedly
+
+2. **Fallback LaunchDaemon**: Created only if the primary service fails to start, located at `/Library/LaunchDaemons/`:
+   - Acts as a backup to ensure the service loads even if the initial loading fails
+   - Runs with system-level privileges to avoid permission issues
 
 ### Browser Installation
 

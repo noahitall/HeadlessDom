@@ -193,11 +193,44 @@ chmod 644 /Library/LaunchAgents/com.headlessdom.service.plist
 mkdir -p /usr/local/bin
 ln -sf /Applications/HeadlessDom/headlessdom /usr/local/bin/headlessdom
 
-# Start the service
+# Ensure the launch agent is loaded for all users by using a global domain
+echo "Loading LaunchAgent for HeadlessDom..."
 launchctl load /Library/LaunchAgents/com.headlessdom.service.plist
+
+# Verify the service is running
+sleep 3
+if ! launchctl list | grep com.headlessdom.service > /dev/null; then
+    echo "WARNING: Service did not start automatically. Attempting to start manually..."
+    launchctl load -w /Library/LaunchAgents/com.headlessdom.service.plist
+    
+    # Create a startup item that will run at next login to ensure the service is running
+    cat > /Library/LaunchDaemons/com.headlessdom.startup.plist << 'STARTUP_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.headlessdom.startup</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>launchctl load -w /Library/LaunchAgents/com.headlessdom.service.plist</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
+STARTUP_EOF
+    chmod 644 /Library/LaunchDaemons/com.headlessdom.startup.plist
+    launchctl load /Library/LaunchDaemons/com.headlessdom.startup.plist
+fi
 
 echo "HeadlessDom has been installed and started."
 echo "You can manage it using: headlessdom {start|stop|restart|status|logs|test|reinstall-browser}"
+
+# Create a file to track installation
+date > /Applications/HeadlessDom/installed_on.txt
 
 exit 0
 EOF
@@ -267,7 +300,7 @@ cat > resources/conclusion.html << 'EOF'
 <body>
     <h2>Installation Complete</h2>
     <p>HeadlessDom has been successfully installed on your computer and started as a service.</p>
-    <p>You can manage the service using the command: <code>headlessdom {start|stop|restart|status|logs|test}</code></p>
+    <p>You can verify the service is running with: <code>headlessdom status</code></p>
     <p>The API is available at: <code>http://localhost:5000</code></p>
     <p>To test the API, try:</p>
     <pre>headlessdom test</pre>
@@ -275,6 +308,8 @@ cat > resources/conclusion.html << 'EOF'
     <pre>curl http://localhost:5000/health</pre>
     <p>If you encounter browser installation issues, run:</p>
     <pre>sudo headlessdom reinstall-browser</pre>
+    <p>If the service is not running after installation, restart your computer or run:</p>
+    <pre>sudo headlessdom restart</pre>
     <p>To uninstall in the future, run:</p>
     <pre>sudo /Applications/HeadlessDom/uninstall.sh</pre>
 </body>
