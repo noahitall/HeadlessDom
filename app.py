@@ -3,6 +3,7 @@ import asyncio
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 import os
 import logging
+import socket
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
@@ -181,13 +182,35 @@ def handle_extract():
         logger.exception("Error processing request")
         return jsonify({"error": str(e)}), 500
 
+def is_running_in_docker():
+    """Check if the application is running inside a Docker container"""
+    # Method 1: Check for .dockerenv file
+    if os.path.exists('/.dockerenv'):
+        return True
+    
+    # Method 2: Check cgroup
+    try:
+        with open('/proc/1/cgroup', 'r') as f:
+            return 'docker' in f.read()
+    except:
+        pass
+    
+    # Method 3: Check environment variable
+    if os.environ.get('RUNNING_IN_DOCKER') == 'true':
+        return True
+    
+    return False
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 't')
     
-    # Inside containers, always bind to all interfaces (0.0.0.0)
-    # Security should be handled at the Docker level by binding only to localhost
-    host = '0.0.0.0'
+    # Determine if this is running in Docker or as a service
+    is_docker = is_running_in_docker()
+    is_service = os.environ.get('RUNNING_AS_SERVICE') == 'true'
     
-    logger.info(f"Starting server on {host}:{port}, debug={debug}")
+    # Bind to all interfaces when in Docker, local interface when running as service
+    host = '0.0.0.0' if is_docker else '127.0.0.1'
+    
+    logger.info(f"Starting server on {host}:{port}, debug={debug}, docker={is_docker}, service={is_service}")
     app.run(host=host, port=port, debug=debug) 

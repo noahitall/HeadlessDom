@@ -1,0 +1,50 @@
+# HeadlessDom .gitignore
+
+# Build directories and artifacts
+HeadlessDom-Build/
+*.pkg
+*.dmg
+*.app
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.env
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Playwright
+browsers/
+**/ms-playwright/
+
+# Logs
+logs/
+*.log
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Temporary files
+*.tmp
+tmp/
+temp/ 
