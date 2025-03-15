@@ -1,16 +1,23 @@
 # Headless DOM Content Extractor
 
-A containerized web scraping API that extracts content from websites based on CSS selectors.
+A web scraping API that extracts content from websites based on CSS selectors. Available as both a Docker container and a native macOS service.
 
 ## Overview
 
-This Docker container runs a web server that accepts HTTP POST requests with a URL and CSS selector, 
+This tool runs a web server that accepts HTTP POST requests with a URL and CSS selector, 
 visits the webpage using Playwright (a headless browser automation tool), 
 and returns the content matching the selector.
 
-## Usage
+## Installation Options
 
-### Build the Docker Image
+You can run HeadlessDom in two ways:
+
+1. **Docker Container** - Run as an isolated container (cross-platform)
+2. **Native macOS Service** - Install directly on macOS to run as a system service
+
+### Option 1: Docker Installation
+
+Build the Docker image:
 
 ```bash
 docker build -t headless-dom .
@@ -22,31 +29,99 @@ For a more secure version that runs as a non-root user:
 docker build -t headless-dom-secure -f Dockerfile-secure .
 ```
 
-### Run the Container Securely
+Run the container securely:
 
 ```bash
 docker run -p 127.0.0.1:5000:5000 headless-dom
 ```
 
-This is the recommended way to run the container:
-- The Flask app inside the container binds to all interfaces (0.0.0.0)
-- But Docker only exposes the port on localhost (127.0.0.1)
-- This ensures the service is only accessible from your local machine
+### Option 2: Native macOS Installation
 
-You can change the port:
+For macOS users who prefer not to use Docker, you can install HeadlessDom as a native service that starts automatically at system boot.
+
+#### Building the Installer
+
+Follow these steps to build the installer package:
+
+1. Make sure the required build tools are installed:
+   ```bash
+   # Check if the required tools are available
+   which pkgbuild productbuild
+   ```
+   If the tools are not found, install the Command Line Tools:
+   ```bash
+   xcode-select --install
+   ```
+
+2. Run the build script:
+   ```bash
+   chmod +x build_installer.sh
+   ./build_installer.sh
+   ```
+
+3. The script will create the installer at `HeadlessDom-Build/HeadlessDom-Installer.pkg`
+
+#### Installation Process
+
+1. Double-click the `HeadlessDom-Installer.pkg` file
+2. Follow the on-screen instructions
+3. Enter your administrator password when prompted
+4. The installer will:
+   - Create the HeadlessDom directories in `/Applications/HeadlessDom/`
+   - Set up a Python virtual environment
+   - Install required dependencies
+   - Install Playwright and the Chromium browser to a dedicated path
+   - Configure the service to start automatically
+   - Verify that the service has started successfully
+
+5. After installation completes, verify the service is running:
+   ```bash
+   headlessdom status
+   headlessdom test
+   ```
+
+#### Managing the macOS Service
+
+The installer adds a command-line tool for managing the service:
 
 ```bash
-docker run -p 127.0.0.1:8080:5000 headless-dom
+# Check status
+headlessdom status
+
+# Stop the service
+headlessdom stop
+
+# Start the service
+headlessdom restart
+
+# View logs
+headlessdom logs
+
+# Test the service
+headlessdom test
+# or
+curl http://localhost:5000/health
+
+# Reinstall Playwright browser if needed
+sudo headlessdom reinstall-browser
 ```
+
+To uninstall:
+```bash
+sudo /Applications/HeadlessDom/uninstall.sh
+```
+
+## Usage
 
 ### Environment Variables
 
 You can customize the behavior using environment variables:
 
-- `PORT`: Change the port the server listens on inside the container (default: 5000)
+- `PORT`: Change the port the server listens on (default: 5000)
 - `DEBUG`: Enable debug mode (default: false)
+- `RUNNING_AS_SERVICE`: Set by the macOS installer to configure service-specific behavior
 
-Example:
+Example with Docker:
 
 ```bash
 # Change port and enable debug mode
@@ -62,7 +137,7 @@ For maximum security:
    ```bash
    docker run -p 127.0.0.1:5000:5000 headless-dom-secure
    ```
-3. See SECURITY.md for additional security recommendations
+3. The native macOS service automatically binds only to localhost for security
 
 ### API Endpoints
 
@@ -212,29 +287,6 @@ curl -X POST http://localhost:5000/extract \
   -d '{"url":"https://spa-example.com","selector":".dashboard-data","wait_for":{"wait_for_selector":".app-loaded","wait_time":5}}'
 ```
 
-Using curl with a long wait time for JavaScript-heavy pages:
-
-```bash
-curl -X POST http://localhost:5000/extract \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://spa-example.com","selector":".dashboard-data","wait_for":{"wait_time":15}}'
-```
-
-### Common Errors and Fixes
-
-1. **"Error while parsing selector"** - Make sure you're using a valid CSS selector string, not a number or empty string:
-   ```
-   // Incorrect:
-   "wait_for": {"wait_for_selector": 15}
-   
-   // Correct:
-   "wait_for": {"wait_for_selector": "#element-with-id"}
-   ```
-
-2. **"Timeout waiting for selector"** - The element never appeared on the page within the timeout period. Try a different selector or increase the timeout.
-
-3. **"Selector not found on page"** - Your target content selector doesn't match any elements. Check that the selector is correct and the page has loaded properly.
-
 ### Example Response
 
 When getting all matching elements (default):
@@ -279,7 +331,7 @@ If an error occurs, the API will return a JSON object with an error message:
 
 ## Features
 
-- Containerized solution for easy deployment
+- Available as both a Docker container and native macOS service
 - Extracts both HTML and text content from matched elements
 - Handles multiple matching elements
 - Supports querySelector-like behavior (first match only option)
@@ -287,9 +339,11 @@ If an error occurs, the API will return a JSON object with an error message:
 - Configurable timeouts for slow-loading pages
 - Advanced options for JavaScript-heavy applications
 - Detailed error messages for debugging
-- Secure Docker configuration
+- Secure configurations
 
 ## Troubleshooting
+
+### General Issues
 
 If you encounter any issues:
 
@@ -300,27 +354,100 @@ If you encounter any issues:
    - Set `wait_for_selector` to an element that appears when your content is loaded
    - Or set `wait_time` to allow sufficient time for JavaScript execution
 5. Some websites may block automated browsers or require additional handling for JavaScript rendering
-6. Check the container logs for more detailed error information:
-   ```bash
-   docker logs <container_id>
-   ```
-7. If you can't connect to the service with curl, make sure you're using the correct port and hostname (localhost)
 
-### Playwright Browser Issues
+### Docker-Specific Troubleshooting
 
-If you see errors like "Executable doesn't exist" or browser installation messages:
+Check the container logs for more detailed error information:
+```bash
+docker logs <container_id>
+```
 
-1. Rebuild the Docker image from scratch to ensure a clean installation:
-   ```bash
-   docker build --no-cache -t headless-dom-secure -f Dockerfile-secure .
-   ```
+If you can't connect to the service with curl, make sure you're using the correct port and hostname (localhost).
 
-2. Test that Playwright can access the browser inside the container:
-   ```bash
-   docker run --rm headless-dom-secure python -c "from playwright.sync_api import sync_playwright; print('Browser works!') if sync_playwright().start().chromium.launch() else print('Browser failed')"
-   ```
+### macOS Native Service Troubleshooting
 
-3. For the secure container, make sure the browser is installed as the non-root user, which is handled by the Dockerfile-secure.
+#### Browser Installation Issues
+
+If you see errors like "Executable doesn't exist" or "Playwright was just installed or updated":
+
+```bash
+# Reinstall the browser in the correct location
+sudo headlessdom reinstall-browser
+
+# Then restart the service
+headlessdom restart
+```
+
+This command ensures the browser is installed in the custom browser path that the service is configured to use (`/Applications/HeadlessDom/browsers`).
+
+#### Service Not Starting
+
+If the service isn't starting automatically:
+
+```bash
+# Check if the plist file exists
+ls -la /Library/LaunchAgents/com.headlessdom.service.plist
+
+# Try manually loading the service
+sudo launchctl load -w /Library/LaunchAgents/com.headlessdom.service.plist
+
+# Check for errors
+sudo launchctl list | grep headlessdom
+```
+
+#### Installation Failures
+
+Check the installation logs:
+```bash
+sudo cat /var/log/install.log | grep HeadlessDom
+```
+
+If you see security warnings, you may need to:
+- Go to System Preferences > Security & Privacy
+- Click "Allow" for the blocked installer
+- Or run: `sudo spctl --master-disable` to temporarily disable Gatekeeper
+
+#### File Permission Issues
+
+If you have trouble with file permissions:
+
+```bash
+sudo chmod -R 755 /Applications/HeadlessDom
+sudo chown -R root:wheel /Applications/HeadlessDom
+```
+
+## Advanced: How the macOS Service Works
+
+### System Architecture
+
+The installer sets up a Python-based web service that:
+
+1. Runs as a LaunchAgent at system startup
+2. Uses a dedicated browser installation path (`/Applications/HeadlessDom/browsers`)
+3. Binds only to localhost (127.0.0.1) for security
+4. Logs to `/Applications/HeadlessDom/logs/`
+
+### Launch Agent and Daemon Configuration
+
+HeadlessDom uses two mechanisms to ensure reliable startup:
+
+1. **Primary LaunchAgent**: Installed in `/Library/LaunchAgents/` with:
+   - `RunAtLoad` set to `true` - makes the service start at boot
+   - `KeepAlive` set to `true` - restarts the service if it terminates unexpectedly
+
+2. **Fallback LaunchDaemon**: Created only if the primary service fails to start, located at `/Library/LaunchDaemons/`:
+   - Acts as a backup to ensure the service loads even if the initial loading fails
+   - Runs with system-level privileges to avoid permission issues
+
+### Browser Installation
+
+HeadlessDom is configured to:
+
+1. Install browsers in a dedicated directory: `/Applications/HeadlessDom/browsers`
+2. Use the `PLAYWRIGHT_BROWSERS_PATH` environment variable to point to this directory
+3. Run as the root user for system-wide accessibility
+
+This approach prevents permission issues that can occur when the service looks for browsers in user-specific cache directories.
 
 ## License
 
